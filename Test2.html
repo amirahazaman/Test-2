@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>لعبة الصيدلية</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #FF9800;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* الهيدر الأبيض */
+        header {
+            width: 100%;
+            background-color: #ffffff;
+            padding: 10px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+        h1 {
+            margin: 0 0 5px 0;
+            color: #333;
+            font-size: 24px;
+        }
+        .health-container {
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .health-label {
+            font-weight: bold;
+            color: #333;
+            font-size: 16px;
+        }
+        .health-bar-bg {
+            flex-grow: 1;
+            height: 20px;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid #ccc;
+        }
+        #health-bar {
+            height: 100%;
+            width: 100%;
+            background-color: #4CAF50;
+            transition: width 0.1s linear;
+        }
+
+        /* ساحة اللعب الزرقاء */
+        #arena {
+            position: relative;
+            width: 95%;
+            max-width: 800px;
+            flex-grow: 1;
+            margin: 15px 0;
+            background-color: #81D4FA;
+            border: 4px solid #0288D1;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.15);
+        }
+        
+        /* شريط العشب الأخضر */
+        .grass {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 30px;
+            background-color: #4CAF50;
+            border-top: 3px solid #388E3C;
+        }
+
+        /* العناصر العائمة */
+        .game-item {
+            position: absolute;
+            padding: 8px 12px;
+            background-color: rgba(255, 255, 255, 0.95);
+            border: 2px solid #0288D1;
+            border-radius: 20px;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-size: 15px;
+            font-weight: bold;
+            color: #222;
+            white-space: nowrap;
+            touch-action: none; /* لمنع التمرير الافتراضي أثناء السحب */
+        }
+        .game-item:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+            z-index: 1000;
+        }
+        .emoji-span {
+            font-size: 20px;
+        }
+
+        /* شاشات النهاية والبدء */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 2000;
+            text-align: center;
+            padding: 20px;
+        }
+        .overlay h2 {
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+        .btn {
+            padding: 12px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>الصيدلية</h1>
+        <div class="health-container">
+            <span class="health-label">الصحة</span>
+            <div class="health-bar-bg">
+                <div id="health-bar"></div>
+            </div>
+        </div>
+    </header>
+
+    <div id="arena">
+        <div class="grass"></div>
+
+        <div id="start-screen" class="overlay">
+            <h2>مرحباً بك في لعبة الصيدلية!</h2>
+            <p>قم بسحب الداء ووضعه فوق الدواء المناسب له أو العكس لإنقاذ المريض.</p>
+            <button class="btn" onclick="startGame()">ابدأ اللعب</button>
+        </div>
+
+        <div id="win-screen" class="overlay hidden">
+            <h2 style="color: #4CAF50;">أحسنت! لقد تم شفاء الجميع 🎉</h2>
+            <button class="btn" onclick="restartGame()">العب مجدداً</button>
+        </div>
+
+        <div id="lose-screen" class="overlay hidden">
+            <h2 style="color: #f44336;">للأسف، انتهت صحة المريض 💔</h2>
+            <button class="btn" onclick="restartGame()">حاول مرة أخرى</button>
+        </div>
+    </div>
+
+<script>
+    // --- بيانات اللعبة الأساسية ---
+    const dataPairs = [
+        { id: 1, type: "disease", text: "الحمى", emoji: "🌡️" }, // ميزان حرارة
+        { id: 1, type: "cure", text: "باراسيتامول", emoji: "💊" },
+        
+        { id: 2, type: "disease", text: "الزكام", emoji: "🤧" }, // عطس
+        { id: 2, type: "cure", text: "دواء الزكام", emoji: "💧" },
+        
+        { id: 3, type: "disease", text: "السعال", emoji: "🗣️" }, // سعال مع خروج رذاذ
+        { id: 3, type: "cure", text: "شراب السعال", emoji: "🧪" },
+        
+        { id: 4, type: "disease", text: "الصداع", emoji: "🤦" }, // إمساك الرأس من الألم
+        { id: 4, type: "cure", text: "باراسيتامول", emoji: "💊" },
+        
+        { id: 5, type: "disease", text: "الإسهال", emoji: "🤢" }, // ألم ومغص بطن
+        { id: 5, type: "cure", text: "أملاح الجفاف", emoji: "🥤" },
+        
+        { id: 6, type: "disease", text: "الجروح الصغيرة", emoji: "🩹" }, // جرح مفتوح/ضمادة
+        { id: 6, type: "cure", text: "ألكوهول والضمادة", emoji: "🧴" },
+        
+        { id: 7, type: "disease", text: "الحكة", emoji: "🖐️" }, // حك الجلد
+        { id: 7, type: "cure", text: "مرهم الحكة", emoji: "🪞" }
+    ];
+
+    let items = [];
+    let health = 100;
+    let isPlaying = false;
+    let animationFrameId;
+    let audioCtx = null;
+    let bmyNode = null; // للموسيقى الخلفية
+
+    const arena = document.getElementById('arena');
+    const healthBar = document.getElementById('health-bar');
+    const startScreen = document.getElementById('start-screen');
+    const winScreen = document.getElementById('win-screen');
+    const loseScreen = document.getElementById('lose-screen');
+
+    // --- إعداد الصوت برمجياً (Web Audio API) ---
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            playBackgroundMusic();
+        }
+    }
+
+    // تشغيل موسيقى ريترو لطيفة متكررة
+    function playBackgroundMusic() {
+        const notes = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25]; // دو ري مي...
+        let noteIndex = 0;
+
+        function playNextNote() {
+            if (!isPlaying) return;
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            
+            osc.type = 'triangle'; // صوت ريترو ناعم
+            osc.frequency.setValueAtTime(notes[noteIndex], audioCtx.currentTime);
+            
+            gain.gain.setValueAtTime(0.05, audioCtx.currentTime); // خفض الصوت ليكون خلفية هادئة
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.4);
+            
+            noteIndex = (noteIndex + 1) % notes.length;
+            setTimeout(playNextNote, 400); // سرعة الإيقاع
+        }
+        playNextNote();
+    }
+
+    // صوت النجاح 👍
+    function playCorrectSound() {
+        if (!audioCtx) return;
+        let now = audioCtx.currentTime;
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now); // نغمة مرتفعة
+        osc.frequency.setValueAtTime(659.25, now + 0.1); 
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(now + 0.3);
+    }
+
+    // صوت الخطأ 👎 (بززز)
+    function playWrongSound() {
+        if (!audioCtx) return;
+        let now = audioCtx.currentTime;
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.type = 'sawtooth'; // صوت خشن
+        osc.frequency.setValueAtTime(120, now); 
+        osc.frequency.setValueAtTime(90, now + 0.1); 
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(now + 0.3);
+    }
+
+    // --- آليات وعناصر اللعبة ---
+    function startGame() {
+        initAudio();
+        startScreen.classList.add('hidden');
+        winScreen.classList.add('hidden');
+        loseScreen.classList.add('hidden');
+        health = 100;
+        isPlaying = true;
+        items = [];
+        
+        // مسح أي عناصر سابقة
+        document.querySelectorAll('.game-item').forEach(el => el.remove());
+
+        // توليد الـ 14 عنصراً وضخها في الساحة
+        dataPairs.forEach((data, index) => {
+            const el = document.createElement('div');
+            el.className = 'game-item';
+            el.innerHTML = `<span class="emoji-span">${data.emoji}</span><span>${data.text}</span>`;
+            arena.appendChild(el);
+
+            // تحديد أبعاد عشوائية أولية بعيداً عن الأطراف
+            const arenaW = arena.clientWidth;
+            const arenaH = arena.clientHeight - 40; // تجنب العشب السفلي
+            const x = Math.random() * (arenaW - 140) + 10;
+            const y = Math.random() * (arenaH - 50) + 10;
+
+            // سرعة حركة عشوائية مستقلة لكل عنصر
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 0.6 + Math.random() * 0.8;
+
+            const itemObj = {
+                element: el,
+                id: data.id,
+                type: data.type,
+                x: x,
+                y: y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                width: 0,
+                height: 0,
+                isDragging: false
+            };
+
+            items.push(itemObj);
+            setupDragAndDrop(itemObj);
+        });
+
+        // تشغيل حلقة التحديث المستمر
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        animationFrameId = requestAnimationFrame(updateGame);
+    }
+
+    // --- المحرك الرئيسي وحركة العناصر (RequestAnimationFrame) ---
+    function updateGame() {
+        if (!isPlaying) return;
+
+        const arenaW = arena.clientWidth;
+        const arenaH = arena.clientHeight - 30; // حسم منطقة العشب
+
+        // تقليل شريط الصحة تدريجياً مع الوقت
+        health -= 0.04; 
+        if (health <= 0) {
+            health = 0;
+            endGame(false);
+        }
+        healthBar.style.width = health + '%';
+
+        // تحريك كل عنصر عائم مستقل
+        items.forEach(item => {
+            if (!item.isDragging) {
+                if (item.width === 0) {
+                    item.width = item.element.offsetWidth;
+                    item.height = item.element.offsetHeight;
+                }
+
+                item.x += item.vx;
+                item.y += item.vy;
+
+                // الارتداد من الجدران الجانبية لعلبة اللعب
+                if (item.x <= 0) { item.x = 0; item.vx *= -1; }
+                if (item.x + item.width >= arenaW) { item.x = arenaW - item.width; item.vx *= -1; }
+                
+                // الارتداد من السقف والأرضية فوق العشب
+                if (item.y <= 0) { item.y = 0; item.vy *= -1; }
+                if (item.y + item.height >= arenaH) { item.y = arenaH - item.height; item.vy *= -1; }
+
+                item.element.style.left = item.x + 'px';
+                item.element.style.top = item.y + 'px';
+            }
+        });
+
+        animationFrameId = requestAnimationFrame(updateGame);
+    }
+
+    // --- نظام السحب والإفلات (يدعم اللمس والماوس) ---
+    function setupDragAndDrop(item) {
+        const el = item.element;
+        let startX = 0, startY = 0;
+
+        // ميكانيكية السحب للماوس واللمس معاً
+        const onStart = (e) => {
+            if (!isPlaying) return;
+            item.isDragging = true;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            const rect = arena.getBoundingClientRect();
+            startX = clientX - (item.x + rect.left);
+            startY = clientY - (item.y + rect.top);
+
+            document.addEventListener('mousemove', onMove, { passive: false });
+            document.addEventListener('mouseup', onEnd);
+            document.addEventListener('touchmove', onMove, { passive: false });
+            document.addEventListener('touchend', onEnd);
+        };
+
+        const onMove = (e) => {
+            if (!item.isDragging) return;
+            if (e.cancelable) e.preventDefault(); // إيقاف التمرير الافتراضي للمتصفح
+
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            const rect = arena.getBoundingClientRect();
+            let targetX = clientX - rect.left - startX;
+            let targetY = clientY - rect.top - startY;
+
+            // الحفاظ على العنصر داخل حدود الصندوق أثناء السحب
+            if (targetX < 0) targetX = 0;
+            if (targetX + item.width > arena.clientWidth) targetX = arena.clientWidth - item.width;
+            if (targetY < 0) targetY = 0;
+            if (targetY + item.height > arena.clientHeight - 30) targetY = arena.clientHeight - 30 - item.height;
+
+            item.x = targetX;
+            item.y = targetY;
+            el.style.left = item.x + 'px';
+            el.style.top = item.y + 'px';
+        };
+
+        const onEnd = () => {
+            if (!item.isDragging) return;
+            item.isDragging = false;
+
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onEnd);
+            document.removeEventListener('touchmove', onMove);
+            document.removeEventListener('touchend', onEnd);
+
+            checkCollisionAndMatch(item);
+        };
+
+        el.addEventListener('mousedown', onStart);
+        el.addEventListener('touchstart', onStart, { passive: true });
+    }
+
+    // --- فحص التطابق والالتقاء عند الإفلات ---
+    function checkCollisionAndMatch(draggedItem) {
+        let matched = false;
+
+        for (let i = 0; i < items.length; i++) {
+            let other = items[i];
+            if (other === draggedItem) continue;
+
+            // التحقق من حدوث تداخل هندسي بين العنصرين
+            if (draggedItem.x < other.x + other.width &&
+                draggedItem.x + draggedItem.width > other.x &&
+                draggedItem.y < other.y + other.height &&
+                draggedItem.y + draggedItem.height > other.y) {
+                
+                // شروط النجاح: نفس المعرّف (id) ونوعين مختلفين (داء ودواء)
+                if (draggedItem.id === other.id && draggedItem.type !== other.type) {
+                    // إخفاء العناصر المتطابقة فوراً وحذفها من المصفوفة
+                    draggedItem.element.remove();
+                    other.element.remove();
+                    
+                    items = items.filter(it => it !== draggedItem && it !== other);
+                    
+                    // زيادة الـصحة بمقدار 15%
+                    health = Math.min(100, health + 15);
+                    playCorrectSound();
+                    matched = true;
+
+                    // فحص حالة الفوز
+                    if (items.length === 0) {
+                        endGame(true);
+                    }
+                    break;
+                } else {
+                    // إذا تداخل مع عنصر خاطئ
+                    playWrongSound();
+                    // إعطاء دفعة ارتدادية بسيطة للخلف لتجنب الالتصاق
+                    draggedItem.vx *= -1.2;
+                    draggedItem.vy *= -1.2;
+                    break;
+                }
+            }
+        }
+    }
+
+    // --- إنهاء اللعبة أو إعادة التشغيل ---
+    function endGame(isWin) {
+        isPlaying = false;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        
+        if (isWin) {
+            winScreen.classList.remove('hidden');
+        } else {
+            loseScreen.classList.remove('hidden');
+        }
+    }
+
+    function restartGame() {
+        startGame();
+    }
+</script>
+
+</body>
+</html>
